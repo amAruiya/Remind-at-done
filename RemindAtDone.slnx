@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RemindAtDone.Core/RemindAtDone.Core.csproj" />
+    <Project Path="src/RemindAtDone/RemindAtDone.csproj" />
+    <Project Path="src/rad/rad.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RemindAtDone.Tests/RemindAtDone.Tests.csproj" />
+  </Folder>
+</Solution>

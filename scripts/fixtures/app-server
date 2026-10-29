@@ -1,0 +1,78 @@
+// Test-only WebSocket daemon over stdin/stdout. No network, models, or real Codex state.
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const root = process.env.CODEX_HOME;
+const state = () => JSON.parse(fs.readFileSync(path.join(root, 'state.json'), 'utf8'));
+const id = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+let buffer = Buffer.alloc(0), upgraded = false;
+function send(value) {
+  const body = Buffer.from(JSON.stringify(value));
+  const header = Buffer.alloc(body.length < 126 ? 2 : 4);
+  header[0] = 0x81;
+  if (body.length < 126) header[1] = body.length;
+  else { header[1] = 126; header.writeUInt16BE(body.length, 2); }
+  process.stdout.write(Buffer.concat([header, body]));
+}
+async function request(message) {
+  if (message.id === undefined) return;
+  const options = state();
+  fs.appendFileSync(path.join(root, 'requests.jsonl'), JSON.stringify({ method: message.method, params: message.params }) + '\n');
+  const error = text => send({ id: message.id, error: { code: -32000, message: text } });
+  const result = value => send({ id: message.id, result: value });
+  if (message.method === 'initialize') return result({ userAgent: 'rad-test-fixture' });
+  if (message.method === 'thread/goal/get') return result({ goal: null });
+  if (message.method === 'thread/turns/list') {
+    const start = message.params.cursor ? JSON.parse(message.params.cursor).offset : 0;
+    const end = Math.min(25, start + (message.params.limit || 20));
+    return result({ data: Array.from({ length: end - start }, (_, i) => ({
+      id: id(24 - start - i), startedAt: 1793247500 + (24 - start - i) * 100,
+      status: 'completed', items: []
+    })), nextCursor: end < 25 ? JSON.stringify({ requestedThreadId: message.params.threadId, offset: end }) : null });
+  }
+  if (message.method === 'thread/loaded/list') {
+    if (options.delay_ms) await new Promise(resolve => setTimeout(resolve, options.delay_ms));
+    if (options.fail) return error('Controlled unavailable daemon');
+    const total = options.loaded_count ?? 66;
+    const start = Number(message.params.cursor || 0), end = Math.min(total, start + 5);
+    return result({ data: Array.from({ length: end - start }, (_, i) => id(start + i)), nextCursor: end < total ? String(end) : null });
+  }
+  if (message.method === 'thread/read') {
+    if (options.read_fail) return error('Controlled missing thread');
+    const n = Number(message.params.threadId.slice(-12));
+    return result({ thread: {
+      id: id(n), name: n === 0 ? 'Older active task' : `Fixture task ${n}`, cwd: options.cwd || root,
+      createdAt: n === 0 ? 1000000000 : 1793247500,
+      parentThreadId: n >= 50 && n < 58 ? id(0) : null,
+      source: n >= 50 && n < 58 ? { subAgent: 'other' } : 'cli',
+      status: n >= 58 ? { type: 'idle' } : n === 1 ? { type: 'futureState' } : n === 2 ? { type: 'systemError' } :
+        { type: 'active', activeFlags: n === 49 ? ['waitingOnApproval'] : [] }
+    } });
+  }
+  return error('Unsupported test method');
+}
+process.stdin.on('data', chunk => {
+  buffer = Buffer.concat([buffer, chunk]);
+  if (!upgraded) {
+    const boundary = buffer.indexOf('\r\n\r\n');
+    if (boundary < 0) return;
+    const key = /Sec-WebSocket-Key:\s*([^\r\n]+)/i.exec(buffer.subarray(0, boundary).toString())[1];
+    const accept = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+    process.stdout.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
+    buffer = buffer.subarray(boundary + 4); upgraded = true;
+  }
+  while (buffer.length >= 2) {
+    const opcode = buffer[0] & 15, masked = buffer[1] & 128;
+    let length = buffer[1] & 127, offset = 2;
+    if (length === 126) { if (buffer.length < 4) return; length = buffer.readUInt16BE(2); offset = 4; }
+    if (length === 127) { if (buffer.length < 10) return; length = Number(buffer.readBigUInt64BE(2)); offset = 10; }
+    if (buffer.length < offset + (masked ? 4 : 0) + length) return;
+    const mask = masked ? buffer.subarray(offset, offset + 4) : null; offset += masked ? 4 : 0;
+    const payload = Buffer.from(buffer.subarray(offset, offset + length));
+    if (mask) for (let i = 0; i < payload.length; i++) payload[i] ^= mask[i % 4];
+    buffer = buffer.subarray(offset + length);
+    if (opcode === 8) return process.exit(0);
+    if (opcode === 1) request(JSON.parse(payload.toString())).catch(error => { process.stderr.write(error.stack); process.exit(1); });
+  }
+});
+process.stdin.on('end', () => process.exit(0));

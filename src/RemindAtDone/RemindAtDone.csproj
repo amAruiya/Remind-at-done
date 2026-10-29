@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets/remind-at-done.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../RemindAtDone.Core/RemindAtDone.Core.csproj" />
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <Content Include="../../scripts/resume-thread.ps1" Link="resume-thread.ps1" CopyToOutputDirectory="PreserveNewest" />
+    <Resource Include="Assets/remind-at-done.ico" />
+  </ItemGroup>
+</Project>

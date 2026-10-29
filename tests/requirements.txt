@@ -1,0 +1,4 @@
+Pillow==10.4.0
+psutil==5.9.0
+websocket-client==1.8.0
+pywinpty==2.0.10

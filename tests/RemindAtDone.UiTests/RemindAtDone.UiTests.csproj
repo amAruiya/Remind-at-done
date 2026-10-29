@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <DisableWinExeOutputInference>true</DisableWinExeOutputInference>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../src/RemindAtDone/RemindAtDone.csproj" /></ItemGroup>
+  <ItemGroup><Resource Include="../../src/RemindAtDone/Assets/remind-at-done.ico" Link="Assets/remind-at-done.ico" /></ItemGroup>
+</Project>
