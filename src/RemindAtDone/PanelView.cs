@@ -159,8 +159,13 @@ internal sealed class PanelView : UserControl,IDisposable
                 var day=DateTimeOffset.Parse(receipt.Report.CompletedAt).ToLocalTime();
                 var group=day.Date==DateTime.Today?"今天":day.Date==DateTime.Today.AddDays(-1)?"昨天":day.ToString("M 月 d 日");
                 if(group!=previousDay){var label=View.Text(group,11,true,muted:true);label.Margin=new Thickness(2,7,0,9);rows.Children.Add(label);previousDay=group;}
-                rows.Children.Add(TaskRow(receipt.Report.Title,new DirectoryInfo(receipt.Report.Cwd).Name,day.ToString("HH:mm"),receipt.Report.Summary,
-                    "check",!receipt.IsRead,()=>ShowDetail(receipt)));
+                var row=TaskRow(receipt.Report.Title,new DirectoryInfo(receipt.Report.Cwd).Name,day.ToString("HH:mm"),receipt.Report.Summary,
+                    "check",!receipt.IsRead,()=>ShowDetail(receipt));
+                if(!receipt.IsRead)row.MouseRightButtonUp+=(_,e)=>
+                {
+                    e.Handled=true;app.MarkRead(receipt.Report.EventId);RefreshHistory();
+                };
+                rows.Children.Add(row);
             }
         }
         else foreach(var task in snapshot.Skip(page*10).Take(10))
